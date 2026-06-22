@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, CheckCircle2, Info, AlertCircle, FileText, Activity } from 'lucide-react';
+import { Send, Bot, User, CheckCircle2, Info, AlertCircle, FileText, Activity, Network, Mic, AudioWaveform } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Markdown from 'react-markdown';
 import { Message, Citation } from '../types';
@@ -18,7 +18,41 @@ export default function Copilot() {
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [noiseFilterEnabled, setNoiseFilterEnabled] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const handleVoiceInput = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Speech recognition is not supported in this browser.");
+      return;
+    }
+    
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+    
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setInput(prev => prev + (prev ? ' ' : '') + transcript);
+    };
+    
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error", event.error);
+      setIsListening(false);
+    };
+    
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+    
+    recognition.start();
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -61,9 +95,21 @@ export default function Copilot() {
           </h2>
           <p className="text-xs text-slate-500 mt-0.5 ml-4">Field Technician Interface • GraphRAG Enabled</p>
         </div>
-        <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-green-700 bg-green-50 border border-green-200 px-2 py-1 flex-row rounded">
-          <CheckCircle2 className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Context Loaded</span>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setNoiseFilterEnabled(!noiseFilterEnabled)}
+            className={cn("flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded transition-colors border",
+              noiseFilterEnabled ? "text-amber-700 bg-amber-50 border-amber-200" : "text-slate-500 bg-slate-50 border-slate-200"
+            )}
+            title="Toggle Edge AI Acoustic Noise Filter"
+          >
+            <AudioWaveform className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{noiseFilterEnabled ? 'Noise Filter: ON' : 'Noise Filter: OFF'}</span>
+          </button>
+          <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-green-700 bg-green-50 border border-green-200 px-2 py-1 flex-row rounded">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Context Loaded</span>
+          </div>
         </div>
       </div>
 
@@ -99,6 +145,17 @@ export default function Copilot() {
             placeholder="e.g., Why is pump P-201 vibrating?"
             className="w-full bg-slate-100 border border-slate-200 text-slate-900 rounded-full pl-5 pr-12 py-3.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-sans placeholder-slate-400 shadow-sm"
           />
+          <button
+            type="button"
+            onClick={handleVoiceInput}
+            className={cn(
+              "absolute right-12 p-2 rounded-full transition-colors flex items-center justify-center shadow-sm",
+              isListening ? "bg-red-500 text-white animate-pulse" : "bg-slate-200 hover:bg-slate-300 text-slate-700"
+            )}
+            title="Voice Input"
+          >
+            <Mic className="w-4 h-4" />
+          </button>
           <button
             type="submit"
             disabled={!input.trim() || isLoading}
@@ -174,6 +231,22 @@ function MessageBubble({ message }: { message: Message }) {
                     <span className="truncate">{cit.source}</span>
                   </div>
                   <p className="text-slate-600 italic line-clamp-2 leading-relaxed text-[11px]">"{cit.snippet}"</p>
+                  {cit.imageUrl && (
+                    <div className="mt-2 relative rounded overflow-hidden border border-slate-200">
+                      <img src={cit.imageUrl} alt="Citation Context" className="w-full h-auto block" />
+                      {cit.boundingBox && (
+                        <div 
+                          className="absolute border-2 border-red-500 bg-red-500/20 shadow-[0_0_8px_rgba(239,68,68,0.8)] pointer-events-none"
+                          style={{
+                            left: `${cit.boundingBox.x}%`,
+                            top: `${cit.boundingBox.y}%`,
+                            width: `${cit.boundingBox.width}%`,
+                            height: `${cit.boundingBox.height}%`
+                          }}
+                        />
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -194,6 +267,26 @@ function MessageBubble({ message }: { message: Message }) {
 function generateMockResponse(query: string): Message {
   const content = query.toLowerCase();
   
+  if (content.includes('upstream isolation valve') && content.includes('p-201')) {
+    return {
+      id: Date.now().toString(),
+      role: 'assistant',
+      content: 'I have analyzed the P&ID blueprint for the cooling system. The upstream isolation valve for Pump P-201 is **Valve V-105**.\n\n*Safety Warning: Close V-105 fully and apply Lockout/Tagout before commencing any maintenance on P-201.*',
+      confidenceScore: 0.98,
+      timestamp: new Date(),
+      citations: [
+        { 
+          id: '1', 
+          source: 'Cooling Sys P&ID (PID-1020)', 
+          type: 'pid', 
+          snippet: 'V-105 provides primary isolation upstream of P-201 suction.',
+          imageUrl: 'https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?q=80&w=600&auto=format&fit=crop',
+          boundingBox: { x: 25, y: 40, width: 8, height: 12 } // Grounding coordinates provided by vision parser
+        }
+      ]
+    };
+  }
+  
   if (content.includes('p-201') || content.includes('vibrat')) {
     return {
       id: Date.now().toString(),
@@ -203,7 +296,14 @@ function generateMockResponse(query: string): Message {
       timestamp: new Date(),
       citations: [
         { id: '1', source: 'OEM Manual P-Series', type: 'manual', snippet: 'Vibration near the impeller housing frequently indicates cavitation. Verify NPSHA.' },
-        { id: '2', source: 'Cooling Sys P&ID', type: 'pid', snippet: 'Strainer tagged S-103 located preceding suction inlet of P-201.' },
+        { 
+          id: '2', 
+          source: 'Cooling Sys P&ID', 
+          type: 'pid', 
+          snippet: 'Strainer tagged S-103 located preceding suction inlet of P-201.',
+          imageUrl: 'https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?q=80&w=600&auto=format&fit=crop',
+          boundingBox: { x: 45, y: 30, width: 10, height: 10 }
+        },
         { id: '3', source: 'Work Order #8834', type: 'work_order', snippet: 'Reported vibration; found minor cavitation wear on impeller.' }
       ]
     };
@@ -212,7 +312,7 @@ function generateMockResponse(query: string): Message {
   return {
     id: Date.now().toString(),
     role: 'assistant',
-    content: "I've searched the current knowledge graph, but I need a specific equipment tag (e.g., P-201) to provide targeted troubleshooting steps or diagrams.",
+    content: "I've searched the current knowledge graph, but I need a specific equipment tag (e.g., P-201) and issue to provide targeted troubleshooting steps or diagrams.",
     timestamp: new Date()
   };
 }

@@ -3,9 +3,16 @@ export type Role = 'user' | 'assistant' | 'system';
 export interface Citation {
   id: string;
   source: string;
-  type: 'manual' | 'pid' | 'work_order' | 'regulation';
+  type: 'manual' | 'pid' | 'work_order' | 'regulation' | 'other';
   snippet: string;
   relevanceUrl?: string; // Mock URL
+  imageUrl?: string;
+  boundingBox?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
 }
 
 export interface Message {
@@ -21,7 +28,7 @@ export interface GraphNode {
   id: string;
   group: number;
   label: string;
-  type: 'equipment' | 'document' | 'concept' | 'work_order';
+  type: 'equipment' | 'document' | 'concept' | 'work_order' | 'regulation';
 }
 
 export interface GraphEdge {
