@@ -1,0 +1,6 @@
+{
+  "name": "ForgeMind AI",
+  "description": "Industrial intelligence at the point of need. GraphRAG Copilot for frontline workers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
