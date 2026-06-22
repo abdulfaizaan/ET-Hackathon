@@ -6,3 +6,13 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Databases & Caches
+backend/llm_cache/
+backend/qdrant_data/
+frontend/node_modules/
